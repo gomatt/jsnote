@@ -7,11 +7,11 @@
       var source = [
         {
           "path" : "start",
-          "raw" : "Welcome to [[jsnote]] v<%jsnote.version%>! You are currently viewing [[<%page.path%>]]."
+          "raw" : "Welcome to [[jsnote]]! You are currently viewing {{page.type}} [[{{page.path}}]]."
         },
         {
-          "path" : "system:template",
-          "raw" : "<layout><div id=\"page_content\"><%page.content%></div></layout>"
+          "path" : "system:template:default",
+          "raw" : "<div id=\"header\">{{page.path}}</div><br /><div id=\"page_content\">{{page.content}}</div>"
         }
       ];
     </script>
@@ -21,7 +21,7 @@
         current: "",
         delimiter: ":",
         action: "::",
-        template: "system:template"
+        template: "system:template:default"
       };
     </script>
     <script id="core">
@@ -45,6 +45,9 @@
           // initialize a blank book
           this.pages = [];
           if (json) this.set(json);
+          
+          // render default template
+          //this.page(core.template).expand();
         }
         Book.prototype = {
           set: function(obj) {
@@ -88,36 +91,43 @@
           for (var key in json) {
             this[key] = json[key];
           }
-          
-          // add additional data
+          // add new required data if necessary
           this.path = this.path || "new";
           this.type = this.type || "page";
+          // add defaults
           this.template = core.template; /* global core */
           this.original = json;
-          //this.book = book;
+          this.book = book;
         }
         Page.prototype = {
-          render: function () {
-            // check if dependents are rendered
-            if (!this.book.page(this.template).rendered) {
-              this.book.page(this.template).render();
+          expand: function () {
+            // check if this page is expanded already
+            if (!this.content) {
+              // replace page placeholders with page values
+              this.content = expand(this); // the name 'content' should be changed to accurately represent expansion
             }
-            
-            // check if this page is rendered
-            if (!this.rendered) {
-              // page not rendered, render now
-              this.output = this.raw;
-              this.rendered = true;
-            }
+            // What happens if already expanded?
+            return false;
           }
         };
+        
+        function expand(page) {
+          // look for expressions in page.raw: {{..}} and replace with values
+          // if "{{page.title}}" is found, replace with the value from page.title
+          // etc.
+          
+          // now return the content
+          
+          // but this doesn't work yet so just return the raw content
+          return page.raw;
+        }
         
         function init() {
           console.log(source);
           var book = new Book(source); /* global source */
           console.log(book);
-          book.page("start").render();
-          document.body.innerHTML = "Finished.";
+          book.page("start").expand();
+          document.body.innerHTML = book.page("start").output;
         }
         
         // AMG? Where does this need to go?
