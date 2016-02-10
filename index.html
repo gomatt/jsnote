@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>jsnote</title>
+    <script id="source">
+      var source = [
+        {
+          "path" : "start",
+          "raw" : "Welcome to [[jsnote]] v<%jsnote.version%>! You are currently viewing [[<%page.path%>]]."
+        },
+        {
+          "path" : "system:template",
+          "raw" : "<layout><div id=\"page_content\"><%page.content%></div></layout>"
+        }
+      ];
+    </script>
+    <script id="config">
+      var core = {
+        version: "0.1a",
+        current: "",
+        delimiter: ":",
+        action: "::",
+        template: "system:template"
+      };
+    </script>
+    <script id="core">
+      (function() {
+        function addListener(obj, eventName, listener) {
+          if (obj.addEventListener) {
+            obj.addEventListener(eventName, listener, false);
+          } else {
+            obj.attachEvent("on" + eventName, listener);
+          }
+        }
+        function handleDCL(e) {
+          console.log("DOMContentLoaded event fired.");
+          init();
+        }
+        function handleLoad(e) {
+          console.log("OnLoad event fired.");
+          //init();
+        }
+        function Book(json) {
+          // initialize a blank book
+          this.pages = [];
+          if (json) this.set(json);
+        }
+        Book.prototype = {
+          set: function(obj) {
+            // AMG? check if the object is an array
+            if (Object.prototype.toString.call(obj) === "[object Array]") {
+              // run through each item in the array
+              for (var index = 0; index < obj.length; ++index) {
+                // send each page to be added to this book
+                this.import_page(obj[index]);
+              }
+              return true;
+            }
+            return false;
+          },
+          import_page: function(json) {
+            // add a new page to the book
+            this.pages.push(new Page(json, this));
+          },
+          index: function(path) {
+            // Return the index for the page path provided
+            for (var index = 0; index < this.pages.length; ++index) {
+              if (this.pages[index].path === path) {
+                return index;
+              }
+            }
+            return false;
+          },
+          page: function(path) {
+            // return the page object
+            try {
+              return this.pages[this.index(path)];
+            }
+            catch (e) {
+              console.log(e.message);
+              return false;
+            }
+          }
+        };
+        function Page(json, book) {
+          // set each key/value pair, if any
+          for (var key in json) {
+            this[key] = json[key];
+          }
+          
+          // add additional data
+          this.path = this.path || "new";
+          this.type = this.type || "page";
+          this.template = core.template; /* global core */
+          this.original = json;
+          //this.book = book;
+        }
+        Page.prototype = {
+          render: function () {
+            // check if dependents are rendered
+            if (!this.book.page(this.template).rendered) {
+              this.book.page(this.template).render();
+            }
+            
+            // check if this page is rendered
+            if (!this.rendered) {
+              // page not rendered, render now
+              this.output = this.raw;
+              this.rendered = true;
+            }
+          }
+        };
+        
+        function init() {
+          console.log(source);
+          var book = new Book(source); /* global source */
+          console.log(book);
+          book.page("start").render();
+          document.body.innerHTML = "Finished.";
+        }
+        
+        // AMG? Where does this need to go?
+        if (!window.addEventListener) {
+          // eventListeners are not supported
+          console.log("Can't add eventListeners; not supported.");
+        } else {
+          // add eventListeners
+          addListener(document, "DOMContentLoaded", handleDCL);
+          addListener(window, "load", handleLoad);
+        }
+      })(this);
+    </script>
+  </head>
+  <body>
+  </body>
+</html>
