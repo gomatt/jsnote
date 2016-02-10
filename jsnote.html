@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="description" content="jsnote">
+<title>jsnote</title>
+<script id="source">
+var source = [
+	{
+		"path" : "home",
+		"raw" : "Welcome to your wiki! You are currently viewing [[<% page.path %>]]."
+	},
+	{
+		"path" : "wiki:template",
+		"type" : "template",
+		"raw" : "<layout><div id=\"header_wrap\"><div id=\"page_title\"><% page.path %></div></div><div id=\"content_wrap\"><div id=\"page_content\"><% page.parsed %></div></div><div id=\"editor_wrap\"><input id=\"page_title_editor\" value=\"<% page.path %>\"></input><br><textarea id=\"page_editor\"><% page.raw %></textarea><br><button id=\"editor_save\">Save</button><button id=\"editor_cancel\">Cancel</button></div></div></layout><style>/* core stylesheet */\nbody {margin:0;padding:0;}\na {color: #00f;cursor:pointer;}\na.broken {color:#f00;cursor:default;}\n/* end of core stylesheet */</style>"
+	}
+];
+</script>
+<script id="jsnote">
+(function() {
+	// CONFIG
+	var config = {
+		version : "0.1a",	// version id
+		home : "home",		// default page path
+		current : "",			// current page path
+		delimiter : ":",	// namespace/page delimiter
+		special : "::"		// special page delimiter
+	};
+	
+	function Book(obj) {
+		// a book with empty pages
+		this.pages = [];
+		// set json, if available
+		if (obj) this.set(obj);
+	}
+	Book.prototype = {
+		set: function(obj) {
+			if(Object.prototype.toString.call(obj) === "[object Array]") {
+				for (var i = 0; i < obj.length; i++) {
+					this.add(obj[i]);
+				}
+				return true;
+			}
+			return false;
+		},
+		add: function(json) {
+			this.pages.push(new Page(json, this));
+		},
+		index: function(path) {
+			for (var i = 0; i < this.pages.length; i++) {
+				if (this.pages[i].path === path) {
+					return i;
+				}
+			}
+			return index;
+		},
+		exist: function(path) {
+			for (var i = 0; i < this.pages.length; i++) {
+				if (this.pages[i].path === path) {
+					return true;
+					break;
+				}
+			}
+			return false;
+		},
+		remove: function(path) {
+			this.pages = this.pages.filter(function(val, index, arr) {
+				return val.path != path;
+			});
+		},
+		count: function() {
+			return this.pages.filter(function(val, index, arr) {
+				return val.path != "";
+			}).length;
+		},
+		page: function(path) {
+			try {
+				return this.pages[this.index(path)];
+			}
+			catch (err) {
+				console.log(err.message);
+				return false;
+			}
+		}
+	}
+	
+	function Page(obj, book) {
+		// set each key/value pair
+		for (var key in obj) {
+			this[key] = obj[key];
+		}
+		// set defaults
+		this.path = this.path || "new";
+		this.type = this.type || "page";
+		this.changed = false;
+		this.previous = obj;
+		this.book = book;
+	}
+	Page.prototype = {
+		setAttributes: function() {
+			// set title, namespaces, dependents
+			var namespaces = this.path.split(config.delimiter);
+			this.title = namespaces.pop();
+			if (namespaces.length > 0)
+				this.namespaces = namespaces;
+			this.dependents = config.dependents;
+		},
+		render: function() {
+			this.setAttributes();
+			
+			// get dependents
+			this.dependents = [];
+			// first, add this namespace template, then the parent namespace
+			// all the way to root. Then add wiki:template
+			
+			// render any dependents that are available
+			for (var i = 0; i < this.dependents.length; i++) {
+				if (this.path != this.dependents[i])
+					this.book.page(this.dependents[i]).render();
+			}
+			
+			// go through each dependent from last to first
+			// take the template from the last dependent to have one
+			// append each of the styles after the first
+			
+			// get and remove layout
+			this.layout = getStringBetween(this.raw, "layout");
+			// get and remove styles
+			this.styles = getStringBetween(this.raw, "style");
+			
+			this.output = this.raw;
+			this.rendered = true;
+		}
+	}
+	
+	function re() {
+		
+	}
+	var helper = {
+		parse: function(obj) {
+			// regex phrases
+			var re = {
+				html_style: /<style>([\s\S]*?)<\/style>/gmi,
+				html_template: /<template>([\s\S]*?)<\/template>/gmi,
+				html_remove: /<\/?([^<\/\s>]+)[^<>\n]*>/g,
+				link_internal: /\[\[([^\]\|]*)(?:\|([^\]]*))?\]\]/g,
+				italic: /(?!\/|\s\/{2})(^|[\s\-_'"*>;([{<])\/(.+?)\//mg,
+				emphasis: /(^|[\s\-_'"*>;([{<])\/{2}(.+?)\/{2}/mg,
+				underline: /(^|[\s\/\-'"*>;([{<])_(.+?)_/mg,
+				strike_through: /(?!^\-{2}|\s\-{2})(^|[\s\/_'"*>;([{<])\-(.+?)\-/mg,
+				del: /(^|[\s\/'"*>;([{<])\-{2}(.+?)\-{2}/mg,
+				strong: /(^|[\s\/\-'"*>;([{<])\!(.+?)\!/mg,
+				bold: /(^|[\s\/\-'">;([{<])\*(.+?)\*/mg,
+				new_line: /\n/g
+			};
+			re.action = new RegExp(config.wikiDelimiter + '(.+)?','g');
+			
+			// content parser
+			parsedContent = obj.raw
+				//.replace(/\\\n/g, "")
+				.replace(re.html_style, "")
+				.replace(re.html_template, "")
+				
+				.replace(re.html_remove, "") // needs to be put back in afterwards
+				.replace(re.italic, "$1<"+"i>$2<"+"/i>")
+				.replace(re.emphasis, "$1<"+"em>$2<"+"/em>")
+				.replace(re.underline, "$1<"+"span style=\"text-decoration:underline;\">$2<"+"/span>")
+				.replace(re.strike_through, "$1<"+"s>$2<"+"/s>")
+				.replace(re.del, "$1<"+"del>$2<"+"/del>")
+				.replace(re.bold, "$1<"+"b>$2<"+"/b>")
+				.replace(re.strong, "$1<"+"strong>$2<"+"/strong>")
+				.replace(re.new_line, "<"+"br>")
+				.replace(re.link_internal, function(str, target, label) {
+					// [[link|label]] or [[link]]
+					if (target) {
+						var renderedLink = renderLink(target, label, obj.path);
+						if (renderedLink) return renderedLink;
+					}
+					return str; // invalid
+				});
+				
+			return parsedContent;
+		}
+	}
+	function renderLink(path, text, source) {
+		text = text || path;
+		
+		if (/^(http|https|w{3}|ftp)([\s\S]*)$/.test(path)) {
+			// external link
+			return renderExternalLink(path, text);
+		}
+		if (/^(?![:])\.{2}?:?([\s\S]*)$/.test(path)) {
+			// relative link
+			var back = 0;
+			var reformatText = path == text;
+			var $path = path.split(config.delimiter);
+			var $namespaces = source.split(config.delimiter);
+			// what level of parent namespaces to go back
+			for (var i = 0; i < $path.length; i++) {
+				if ($path[i] == '..')
+					back++;
+				else i = $path.length;
+			}
+			// remove namespaces to get to correct level
+			for (var i = 0; i <= back; i++) {
+				$namespaces.pop();
+			}
+			// create the new path
+			path = $namespaces.join(config.delimiter);
+			path += config.delimiter;
+			path += removeElement($path, '..').join(config.delimiter);
+			
+			// reformat the text if needed
+			if (reformatText) text = path;
+		}
+		if (/^:(?![:])([\s\S]+)$/.test(path)) {
+			// absolute link
+			if (text == path) {
+				// update text as well, if they match
+				text = path.substring(1, path.length);
+			}
+			path = path.substring(1, path.length);
+		}
+		if (/^(.+)\/([^\/]+)$/.test(path)) {
+			// directory path
+		}
+		if (/^([\s\S]*):$/.test(path)) {}
+		if (/^([\s\S]*?)::([\s\S]*)$/.test(path)) {}
+		return renderInternalLink(path, text);
+	}
+	function renderExternalLink(path, text) {
+		var $link = $('<a>', {
+			href: path,
+			title: path,
+			text: text
+		});
+		$link.addClass('external');
+		return $link.get(0).outerHTML;
+	}
+	function renderInternalLink(path, text) {
+		var $link = $('<a>', {
+			title: path,
+			text: text
+		});
+		// add link classes, if required
+		$link.addClass('internal');
+		if (!book.getRawTitleExist(path)) $link.addClass('broken');
+		return $link.get(0).outerHTML;
+	}
+	function getStringBetween(content, tagPhrase) {
+		var startTag = "<" + tagPhrase + ">";
+		var endTag = startTag.replace(startTag.substring(0, 1), startTag.substring(0, 1) + '/');
+		if (content.indexOf(startTag) > -1 && content.indexOf(endTag) > -1) {
+			var tagString = content.substring(content.indexOf(startTag) + startTag.length, content.indexOf(endTag));
+			return tagString;
+		} else return false;
+	}
+	
+	function init() {
+		var book = new Book(source);
+		console.log(book);
+		book.page("home").render();
+		document.body.innerHTML = book.page("home").output;
+	}
+	
+	document.addEventListener("DOMContentLoaded", function() {
+		// DOM Ready
+		init();
+	});
+	
+})();
+</script>
+</head>
+<body>
+</body>
+</html>
