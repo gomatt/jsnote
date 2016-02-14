@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>jsnote</title>
+    <script id="data">
+      var data = {
+        "home": {
+          "content": "Welcome to [[jsnote]]! You are currently viewing {{page.type}} [[{{page.path}}]]."
+        },
+        "system:template:default": {
+          "content": "<div id=\"header\">{{page.path}}</div><br /><div id=\"page_content\">{{page.content}}</div>"
+        }
+      };
+    </script>
+    <script id="config">
+      // Configuration array
+      var config = {
+        version: "0.1a",
+        current: "",
+        delimiter: ":",
+        action: "::",
+        template: "system:template:default",
+        home: "home"
+      };
+    </script>
+    <script id="core">
+      (function() {
+        function addListener(obj, event, listener) {
+          if (obj.addEventListener) {
+            obj.addEventListener(event, listener, false);
+          } else {
+            obj.attachEvent("on" + event, listener);
+          }
+        }
+        function handleDCL(e) {
+          console.log("DOMContentLoaded event fired.");
+          init();
+        }
+        function handleLoad(e) {
+          console.log("OnLoad event fired.");
+        }
+        function exist(path) {
+          return Object.prototype.toString.call(data[path]) === "[object Object]"; /* global data */
+        }
+        function get_raw(path) {
+          if (exist(path)) {
+            return data[path].content;
+          }
+        }
+        function get(path) {
+          if (rendered(path)) {
+            return cache(path);
+          }
+          else {
+            render(path);
+            return cache(path);
+          }
+        }
+        function render(path) {
+          var raw = get_raw(path);
+          var rendered = raw;
+          return rendered;
+        }
+        function init() {
+          document.body.innerHTML = render(config.home); /* global config */
+        }
+        
+        if (!window.addEventListener) {
+          console.log("Can't add eventListeners; not supported.");
+        } else {
+          addListener(document, "DOMContentLoaded", handleDCL);
+          addListener(window, "load", handleLoad);
+        }
+      })(this);
+    </script>
+  </head>
+  <body>
+  </body>
+</html>

@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <title>jsnote</title>
     <script id="source">
+      var testsource = {
+        "start": {
+          "content": "Welcome to [[jsnote]]! You are currently viewing {{page.type}} [[{{page.path}}]]."
+        },
+        "system:template:default": {
+          "content": "<div id=\"header\">{{page.path}}</div><br /><div id=\"page_content\">{{page.content}}</div>"
+        }
+      };
       var source = [
         {
           "path" : "start",
@@ -16,7 +24,8 @@
       ];
     </script>
     <script id="config">
-      var core = {
+      // Configuration array
+      var config = {
         version: "0.1a",
         current: "",
         delimiter: ":",
@@ -26,11 +35,11 @@
     </script>
     <script id="core">
       (function() {
-        function addListener(obj, eventName, listener) {
+        function addListener(obj, event, listener) {
           if (obj.addEventListener) {
-            obj.addEventListener(eventName, listener, false);
+            obj.addEventListener(event, listener, false);
           } else {
-            obj.attachEvent("on" + eventName, listener);
+            obj.attachEvent("on" + event, listener);
           }
         }
         function handleDCL(e) {
@@ -39,23 +48,19 @@
         }
         function handleLoad(e) {
           console.log("OnLoad event fired.");
-          //init();
         }
-        function Book(json) {
-          // initialize a blank book
+        function Collection(json) {
+          // initialize a blank collection
           this.pages = [];
           if (json) this.set(json);
-          
-          // render default template
-          //this.page(core.template).expand();
         }
-        Book.prototype = {
+        Collection.prototype = {
           set: function(obj) {
-            // AMG? check if the object is an array
+            // AMG? check if the object is valid
             if (Object.prototype.toString.call(obj) === "[object Array]") {
-              // run through each item in the array
+              // import each member
               for (var index = 0; index < obj.length; ++index) {
-                // send each page to be added to this book
+                // send each page to be added to this collection
                 this.import_page(obj[index]);
               }
               return true;
@@ -63,7 +68,7 @@
             return false;
           },
           import_page: function(json) {
-            // add a new page to the book
+            // import a new page to the collection
             this.pages.push(new Page(json, this));
           },
           index: function(path) {
@@ -86,32 +91,29 @@
             }
           }
         };
-        function Page(json, book) {
-          // set each key/value pair, if any
+        function Page(json, collection) {
+          // add each key-value pair
           for (var key in json) {
             this[key] = json[key];
           }
           // add new required data if necessary
           this.path = this.path || "new";
           this.type = this.type || "page";
-          // add defaults
-          this.template = core.template; /* global core */
+          // add other defaults
+          this.template = config.template; /* global config */
           this.original = json;
-          this.book = book;
+          this.collection = collection;
         }
         Page.prototype = {
           expand: function () {
-            // check if this page is expanded already
-            if (!this.content) {
-              // replace page placeholders with page values
-              this.content = expand(this); // the name 'content' should be changed to accurately represent expansion
-            }
-            // What happens if already expanded?
-            return false;
+            this.content = expand(this);
           }
         };
         
-        function expand(page) {
+        function expand(page, source) {
+          // Check if there is a source object to pull information from
+          if (!source) source = page;
+          
           // look for expressions in page.raw: {{..}} and replace with values
           // if "{{page.title}}" is found, replace with the value from page.title
           // etc.
@@ -119,15 +121,23 @@
           // now return the content
           
           // but this doesn't work yet so just return the raw content
-          return page.raw;
+          return source.raw;
         }
         
         function init() {
-          console.log(source);
-          var book = new Book(source); /* global source */
-          console.log(book);
-          book.page("start").expand();
-          document.body.innerHTML = book.page("start").output;
+          //source[0].test = "Test"; /* global testsource */
+          console.log(testsource);
+          console.log(testsource["start"].content);
+          testsource["new"] = testsource["start"];
+          delete testsource["start"];
+          console.log(testsource["new"].content);
+          console.log(testsource["start"].content);
+          //console.log(source);
+          var collection = new Collection(source); /* global source */
+          //console.log(collection);
+          collection.page("start").expand();
+          var current = expand(collection.page("system:template:default"), collection.page("start"));
+          document.body.innerHTML = current;
         }
         
         // AMG? Where does this need to go?
