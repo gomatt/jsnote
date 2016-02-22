@@ -27,9 +27,12 @@
     <script id="core">
       (function() {
         function addListener(obj, event, listener) {
+          /* Add event listener based on browser version */
           if (obj.addEventListener) {
+            /* All browsers (however at least Opera 7, IE 9) */
             obj.addEventListener(event, listener, false);
           } else {
+            /* Opera 6, IE 8 and earlier */
             obj.attachEvent("on" + event, listener);
           }
         }
@@ -37,40 +40,86 @@
           console.log("DOMContentLoaded event fired.");
           init();
         }
-        function handleLoad(e) {
+        function handleOnLoad(e) {
           console.log("OnLoad event fired.");
         }
+        function defaultValue(arg, val) {
+          return typeof arg !== 'undefined' ? arg : val;
+        }
         function exist(path) {
+          // Return boolean - existance of path provided
           return Object.prototype.toString.call(data[path]) === "[object Object]"; /* global data */
         }
-        function get_raw(path) {
+        function get(path, member) {
+          member = defaultValue(member, 'content');
           if (exist(path)) {
-            return data[path].content;
+            return data[path][member];
           }
         }
-        function get(path) {
-          if (rendered(path)) {
-            return cache(path);
-          }
-          else {
-            render(path);
-            return cache(path);
-          }
+        function collection() {
+          // initialize a blank array
+          this.pages = [];
         }
-        function render(path) {
-          var raw = get_raw(path);
-          var rendered = raw;
-          return rendered;
+        collection.prototype = {
+      		index: function(path) {
+      		  // Return the index number for a specific path string
+      		  // The index number is required for the collection array
+      			for (var i = 0; i < this.pages.length; ++i) {
+      				if (this.pages[i].path === path) {
+      					return i;
+      				}
+      			}
+      			return false;
+      		},
+          import: function(path) {
+            // Add the page to the collection if it exists in data
+            // What happens if it already exists in the collection?
+            if (exist(path)) {
+              // Add the new page object to the collection
+              this.pages.push(new page(path, this));
+            }
+          },
+          page: function(path) {
+      			try {
+      				return this.pages[this.index(path)];
+      			}
+      			catch(e) {
+      				console.log(e.message);
+      				return false;
+      			}
+          }
+        };
+        function page(path, collection) {
+          this.path = path;
+          for (var key in data[path]) {
+            this[key] = data[path][key];
+          }
+          this.original = data[path];
+          this.collection = collection;
+          
+          // Now create HTML automatically
+          //this.expand();
+          //this.parse();
+        }
+        page.prototype = {
+
+        };
+        function load(path) {
+          var Collection = new collection();
+          Collection.import(path);
+          console.log(Collection);
+          console.log(Collection.page(path));
+          //document.body.innerHTML = Collection.pages[path].html;
         }
         function init() {
-          document.body.innerHTML = render(config.home); /* global config */
+          load(config.home); /* global config */
         }
         
         if (!window.addEventListener) {
           console.log("Can't add eventListeners; not supported.");
         } else {
           addListener(document, "DOMContentLoaded", handleDCL);
-          addListener(window, "load", handleLoad);
+          addListener(window, "load", handleOnLoad);
         }
       })(this);
     </script>
