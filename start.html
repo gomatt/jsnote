@@ -6,10 +6,10 @@
     <script id="data">
       var data = {
         "home": {
-          "content": "Welcome to [[jsnote]]! You are currently viewing {{page.type}} [[{{page.path}}]]."
+          "content": "Welcome to [[jsnote]]! You are currently viewing the type: '[[{{path}}]]'."
         },
         "system:template:default": {
-          "content": "<div id=\"header\">{{page.path}}</div><br /><div id=\"page_content\">{{page.content}}</div>"
+          "content": "<style>{margin:0;padding:0;}header,footer,aside,nav,article{display:block;}body{background:#ccc;}</style><header><h1>{{path}}</h1></header><nav>[[Home]]</nav><section id=\"page_content\">{{content}}</section><footer>End of template</footer>"
         }
       };
     </script>
@@ -43,7 +43,14 @@
         function handleOnLoad(e) {
           console.log("OnLoad event fired.");
         }
+        if (!window.addEventListener) {
+          console.log("Can't add eventListeners; not supported.");
+        } else {
+          addListener(document, "DOMContentLoaded", handleDCL);
+          addListener(window, "load", handleOnLoad);
+        }
         function defaultValue(arg, val) {
+          // Return a default value if no value is found
           return typeof arg !== 'undefined' ? arg : val;
         }
         function exist(path) {
@@ -57,7 +64,7 @@
           }
         }
         function collection() {
-          // initialize a blank array
+          // initialize a blank array to store page objects
           this.pages = [];
         }
         collection.prototype = {
@@ -80,6 +87,7 @@
             }
           },
           page: function(path) {
+            // Return the page object for the specified path string
       			try {
       				return this.pages[this.index(path)];
       			}
@@ -98,28 +106,84 @@
           this.collection = collection;
           
           // Now create HTML automatically
-          //this.expand();
-          //this.parse();
+          if (this.content) {
+            this.expand();
+            //this.parse();
+          }
         }
         page.prototype = {
-
+          expand: function() {
+            var original; // the 'original' page content
+            
+            // Add the template content first
+            this.expanded = data[config.template].content;
+            
+            // Check if this is a template
+            if (this.path === config.template) {
+              // Expanding a template doesn't make sense for right now
+              this.expanded = this.content;
+            } else {
+              // Keep expanding until there is nothing to expand
+              do {
+                console.log("Expanding '" + this.path + "'");
+                original = this.expanded;
+                this.expanded = tmpl(this.expanded, this);
+                // I feel like only one of these checks are necessary.
+                // If nothing was changed after expanding, then there is nothing to expand.
+              } while (this.expanded.indexOf("{{") > -1 && this.expanded !== original); // Nothing to expand AND nothing has changed since last expand
+              console.log("Expansion of '" + this.path + "' Complete");
+            }
+          }
         };
+        function tmpl(template, data) {
+          // Template function
+          // Add data from a page to a template (string) and return the content
+          // Look for "{{ .. }}" and replace with data from the object
+          var reReplace = /{{(.+?)}}/g,
+                reUnmodified = /(^( )?(var|if|for|else|switch|case|break|{|}))(.*)?/g,
+                output = 'with (obj) {var r=[];\n',
+                pointer = 0,
+                match,
+                result;
+          var add = function(line, js) {
+            if (js) {
+              if (line.match(reUnmodified)) {
+                output += line + '\n';
+              } else {
+                output += 'r.push(' + line + ');\n';
+              }
+            } else {
+              if (line != '') {
+                output += 'r.push("' + line.replace(/"/g, '\\"') + '");\n';
+              }
+            }
+            return add;
+          };
+          // Do until reRelease.exec(...) is undefined
+          // This will continue until nothing is found using the regular expression
+          while(match = reReplace.exec(template)) {
+              add(template.slice(pointer, match.index))(match[1], true);
+              pointer = match.index + match[0].length;
+          }
+          add(template.substr(pointer, template.length - pointer));
+          
+          // Add ending to output and remove line breaks
+          output = (output + 'return r.join(""); }').replace(/[\r\t\n]/g, ' ');
+          
+          // Try to apply data and report errors
+          try { result = new Function('obj', output).apply(data, [data]); }
+          catch (e) { console.error("'" + e.message + "'", " in code:\n", output, "\n"); }
+          
+          // Return results
+          return result;
+        }
         function load(path) {
           var Collection = new collection();
           Collection.import(path);
-          console.log(Collection);
-          console.log(Collection.page(path));
-          //document.body.innerHTML = Collection.pages[path].html;
+          document.body.innerHTML = Collection.page(path).expanded;
         }
         function init() {
           load(config.home); /* global config */
-        }
-        
-        if (!window.addEventListener) {
-          console.log("Can't add eventListeners; not supported.");
-        } else {
-          addListener(document, "DOMContentLoaded", handleDCL);
-          addListener(window, "load", handleOnLoad);
         }
       })(this);
     </script>
