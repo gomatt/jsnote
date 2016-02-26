@@ -6,10 +6,13 @@
     <script id="data">
       var data = {
         "home": {
-          "content": "Welcome to [[jsnote]]! You are currently viewing the type: '[[{{path}}]]'."
+          "content": "Welcome to [[jsnote]]! You are currently viewing the page: '[[{{=path}}]]'.<br /><br />Let's look at some markup:<br />HTML tags are allowed.<br />{{{No markup tags}}} are used to disable any mark up and can be used within mark up **Bold and {{{not bold}}}**<br /><br />Now let's transclude another page:<br />{{testpage}}"
         },
-        "system:template:default": {
-          "content": "<style>{margin:0;padding:0;}header,footer,aside,nav,article{display:block;}body{background:#ccc;}</style><header><h1>{{path}}</h1></header><nav>[[Home]]</nav><section id=\"page_content\">{{content}}</section><footer>End of template</footer>"
+        "system:view": {
+          "content": "<style>{margin:0;padding:0;}header,footer,aside,nav,article{display:block;}body{background:#ccc;}</style><header>Start of template<br /><h1>{{=path}}</h1></header><nav>[[:help]]</nav><section id=\"page_content\">{{=content}}</section><footer>End of template</footer>"
+        },
+        "testpage": {
+          "content": "Transcluded content!"
         }
       };
     </script>
@@ -20,7 +23,7 @@
         current: "",
         delimiter: ":",
         action: "::",
-        template: "system:template:default",
+        template: "system:view",
         home: "home"
       };
     </script>
@@ -113,58 +116,86 @@
         }
         page.prototype = {
           expand: function() {
-            var original; // the 'original' page content
+            //var original; // the 'original' page content
             
             // Add the template content first
-            this.expanded = data[config.template].content;
+            this.output = data[config.template].content;
             
             // Check if this is a template
             if (this.path === config.template) {
               // Expanding a template doesn't make sense for right now
-              this.expanded = this.content;
+              this.output = this.content;
             } else {
-              // Keep expanding until there is nothing to expand
-              do {
-                console.log("Expanding '" + this.path + "'");
-                original = this.expanded;
-                this.expanded = tmpl(this.expanded, this);
-                // I feel like only one of these checks are necessary.
-                // If nothing was changed after expanding, then there is nothing to expand.
-              } while (this.expanded.indexOf("{{") > -1 && this.expanded !== original); // Nothing to expand AND nothing has changed since last expand
-              console.log("Expansion of '" + this.path + "' Complete");
+              // Replace "{{{" and "}}}" to nowiki tags
+              //this.noMarkup();
+              
+              // Use a templating engine
+              this.output = tmpl(this.output, this);
             }
+            return this.output;
           }
         };
         function tmpl(template, data) {
+          console.log("Using template: " + template);
           // Template function
           // Add data from a page to a template (string) and return the content
-          // Look for "{{ .. }}" and replace with data from the object
-          var reReplace = /{{(.+?)}}/g,
+          // Look for "{{= .. }}" and replace with data from the object
+          //{{([^{]((?!}}).)*)}}
+          // {{2,}(.+?)}{2,} - Find any {{..}}
+          // {{2}([^}]*.?;? ?)}{2} - find a lot!
+          var reNoMarkup = /{{3}(.+?)}{3}/g,
+              reMatching = /({{+.+?}}+)/g,
+              reCode = /{{=([^{{].+?)}}/g,
+              reTransclude = /{{([^{{].+?)}}/g,
               reUnmodified = /(^( )?(var|if|for|else|switch|case|break|{|}))(.*)?/g,
               output = 'with (obj) {var r=[];\n',
               pointer = 0,
               match,
               result;
-          var add = function(line, js) {
-            if (js) {
+          function add(line, code) {
+            if (code) {
+              // code doesn't need quotes
               if (line.match(reUnmodified)) {
+                // do not modify
                 output += line + '\n';
               } else {
                 output += 'r.push(' + line + ');\n';
               }
             } else {
+              // string needs quotes, if not blank
               if (line != '') {
                 output += 'r.push("' + line.replace(/"/g, '\\"') + '");\n';
               }
             }
             return add;
-          };
-          // Do until reRelease.exec(...) is undefined
+          }
+          function addNoMarkup(line) {
+            output += 'r.push("<nowiki>' + line + '</nowiki>");\n';
+          }
+          // Do until reMatching.exec(...) is undefined
           // This will continue until nothing is found using the regular expression
-          while(match = reReplace.exec(template)) {
-            add(template.slice(pointer, match.index))(match[1], true);
+          while(match = reMatching.exec(template)) {
+            var test = match[1];
+            console.log("Match: " + test);
+            // Add what was before the matching text
+            add(template.slice(pointer, match.index));
+            
+            if (test.match(reNoMarkup)) {
+              test = reNoMarkup.exec(test);
+              addNoMarkup(test[1]);
+            } else if (test.match(reCode)) {
+              test = reCode.exec(test);
+              add(test[1], true);
+            }// else if (test.match(reTransclude)) {
+            //   test = reTransclude.exec(test);
+            //   addPageContent(test[1]);
+            // }
+
+            // Move pointer and continue
             pointer = match.index + match[0].length;
           }
+          
+          // Add the rest of the string
           add(template.substr(pointer, template.length - pointer));
           
           // Add ending to output and remove line breaks
@@ -172,7 +203,10 @@
           
           // Try to apply data and report errors
           try { result = new Function('obj', output).apply(data, [data]); }
-          catch (e) { console.error("'" + e.message + "'", " in code:\n", output, "\n"); }
+          catch (err) { console.error("'" + err.message + "'", " in code:\n", output, "\n"); }
+          
+          // Recursively replace
+          if (reMatching.exec(result)) result = tmpl(result, data);
           
           // Return results
           return result;
@@ -180,7 +214,7 @@
         function load(path) {
           var Collection = new collection();
           Collection.import(path);
-          document.body.innerHTML = Collection.page(path).expanded;
+          document.body.innerHTML = Collection.page(path).output;
         }
         function init() {
           load(config.home); /* global config */
